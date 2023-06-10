@@ -27,12 +27,61 @@ def draw_points_on_image(image_path, points):
 
     plt.show()
 
+def draw_rectangles_on_image(image_path, rectangles):
+    # Load the image
+    image = plt.imread(image_path)
+    fig, ax = plt.subplots()
+    ax.imshow(image)
+    for rect in rectangles:
+        print(rect)
+        x_coords, y_coords = zip(*rect)
+        x_coords = list(x_coords) + [x_coords[0]]
+        y_coords = list(y_coords) + [y_coords[0]]
+        ax.plot(x_coords, y_coords)
+    height, width, _ = image.shape
+    ax.set_xlim(0, width)
+    ax.set_ylim(height, 0)
+
+    plt.show()
+
 
 def compute_transformation(points_frame1, points_frame2):
     """ given lists of 2d points in two frames,
     compute the transform from frame 1 to frame 2 """
     transformation = transform.estimate_transform('affine', points_frame1, points_frame2)
     return transformation
+
+import math
+
+def compute_rectangle_corners(center, dimensions, rotation_angle):
+    half_width = dimensions[0] / 2
+    half_height = dimensions[1] / 2
+
+    cos_theta = math.cos(rotation_angle)
+    sin_theta = math.sin(rotation_angle)
+
+    top_left_corner = (
+        center[0] - half_width * cos_theta + half_height * sin_theta,
+        center[1] - half_width * sin_theta - half_height * cos_theta
+    )
+
+    top_right_corner = (
+        center[0] + half_width * cos_theta + half_height * sin_theta,
+        center[1] + half_width * sin_theta - half_height * cos_theta
+    )
+
+    bottom_right_corner = (
+        center[0] + half_width * cos_theta - half_height * sin_theta,
+        center[1] + half_width * sin_theta + half_height * cos_theta
+    )
+
+    bottom_left_corner = (
+        center[0] - half_width * cos_theta - half_height * sin_theta,
+        center[1] - half_width * sin_theta + half_height * cos_theta
+    )
+
+    return [top_left_corner, top_right_corner, bottom_right_corner, bottom_left_corner]
+
 
 # TODO polish and automate the script
 if __name__ == "__main__":
@@ -57,9 +106,19 @@ if __name__ == "__main__":
     annotations = data['annotations']
     pts_2_transform = np.array([ann['translation'][:-1] for ann in annotations])
     # get edges of a bounding box
+    rotations = [ann['rotation'][-1] for ann in annotations]
+    dimensions = [ann['dimension'][:-1] for ann in annotations]
+    corners = []
+    for rotation, dimension, pt in zip(rotations, dimensions, pts_2_transform):
+        corners.append(transformation(np.array(compute_rectangle_corners(pt, dimension, rotation))))
+    print(corners)
+    #pts_2_transform = np.vstack((pts_2_transform, np.array(corners)))
 
-    print(pts_2_transform)
+    #print(pts_2_transform)
     transformed = transformation(pts_2_transform)
     print("transformed", transformed)
-    draw_points_on_image("./2022-10-06T16-34-42/frame_0.jpeg", transformed)
+    #draw_points_on_image("./2022-10-06T16-34-42/frame_0.jpeg", transformed)
+    draw_rectangles_on_image("./2022-10-06T16-34-42/frame_0.jpeg", corners)
+
+    # TODO do a loop, save into the json
 
