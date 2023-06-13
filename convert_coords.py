@@ -2,6 +2,8 @@
 import numpy as np
 from skimage.transform import SimilarityTransform, ProjectiveTransform
 from skimage import transform
+import cv2
+import os
 # 1. load a description of the points from a yaml file or sth (first just put it manually)
 # both pixel coords annotated and the GPS coords (which I need to convert to local frame first)
 
@@ -10,12 +12,12 @@ from skimage import transform
 # 3. apply the transform to the points in the local frame
 
 import json
+import yaml
 
 import matplotlib.pyplot as plt
 
-def draw_points_on_image(image_path, points):
+def draw_points_on_image(image, points):
     # Load the image
-    image = plt.imread(image_path)
     fig, ax = plt.subplots()
     ax.imshow(image)
 
@@ -27,9 +29,7 @@ def draw_points_on_image(image_path, points):
 
     plt.show()
 
-def draw_rectangles_on_image(image_path, rectangles):
-    # Load the image
-    image = plt.imread(image_path)
+def draw_rectangles_on_image(image, rectangles):
     fig, ax = plt.subplots()
     ax.imshow(image)
     for rect in rectangles:
@@ -83,8 +83,61 @@ def compute_rectangle_corners(center, dimensions, rotation_angle):
     return [top_left_corner, top_right_corner, bottom_right_corner, bottom_left_corner]
 
 
-# TODO polish and automate the script
-if __name__ == "__main__":
+
+def track_sparse_points(video_path, initial_points):
+    # TODO test if this works with sequences where the drone turns
+    cap = cv2.VideoCapture(video_path)
+    ret, prev_frame = cap.read()
+    prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
+    points_to_track = initial_points.astype(np.float32)
+    lk_params = dict(winSize=(15, 15), maxLevel=2, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        next_points, status, _ = cv2.calcOpticalFlowPyrLK(prev_gray, gray, points_to_track, None, **lk_params)
+        status = status.flatten()
+
+        good_new = next_points[status == 1]
+        print(good_new)
+
+        points_to_track = good_new
+        yield good_new, frame
+
+
+        prev_gray = gray.copy()
+
+    cap.release()
+
+
+def transform_image_points(points_utm, points_picture, json_path, local_center=np.array([692009, 5338095])):
+    # TODO add arg to save into JSON directly
+    points_local_coord = points_utm - local_center
+    # points picture from get_image_coords.py
+    transformation = compute_transformation(points_local_coord, points_picture)
+
+
+
+    # load points dynamically
+    with open(json_path, "r") as f:
+        data = json.load(f)
+    annotations = data['annotations']
+    pts_2_transform = np.array([ann['translation'][:-1] for ann in annotations])
+    # get edges of a bounding box
+    rotations = [ann['rotation'][-1] for ann in annotations]
+    dimensions = [ann['dimension'][:-1] for ann in annotations]
+    transformed_centers = transformation(pts_2_transform)
+    corners = []
+    for rotation, dimension, pt in zip(rotations, dimensions, pts_2_transform):
+        corners.append(transformation(np.array(compute_rectangle_corners(pt, dimension, rotation))))
+  
+    return transformed_centers, corners
+
+
+def example_single_frame():
     # order should be: big kanal, canal at the stop, small kanal
     # this will be constant always
     # TODO save this somewhere to a config file :)
@@ -101,7 +154,7 @@ if __name__ == "__main__":
 
 
     # load points dynamically
-    with open("./2022-10-06T16-34-42/2022-10-06T16-34-42_00000.json", "r") as f:
+    with open("./2022-10-06T16-34-42/annotations/2022-10-06T16-34-42_00000.json", "r") as f:
         data = json.load(f)
     annotations = data['annotations']
     pts_2_transform = np.array([ann['translation'][:-1] for ann in annotations])
@@ -117,8 +170,53 @@ if __name__ == "__main__":
     #print(pts_2_transform)
     transformed = transformation(pts_2_transform)
     print("transformed", transformed)
-    #draw_points_on_image("./2022-10-06T16-34-42/frame_0.jpeg", transformed)
-    draw_rectangles_on_image("./2022-10-06T16-34-42/frame_0.jpeg", corners)
+    image_path = "./2022-10-06T16-34-42/frame_0.jpeg"
+    img = plt.imread(image_path)
+    draw_points_on_image(img, transformed)
+    draw_rectangles_on_image(img, corners)
+    plt.show()
 
     # TODO do a loop, save into the json
 
+def example_video():
+    video_dir = "2022-10-06T16-34-42"
+    video = f'./{video_dir}/DJI_0777_cut.mp4'
+
+    # TODO have all the jsons ready to take the points from them
+    world2pic_file = f"{video_dir}/world2pic.yaml"
+    with open(world2pic_file, "r") as f:
+        world2pic = yaml.load(f, yaml.BaseLoader)
+    print(world2pic)
+    points_utm = np.array(world2pic["measured_pts"]["world_utm"],  dtype=np.float64)
+    points_picture = np.array(world2pic["measured_pts"]["pic"],  dtype=np.float64) #np.array([(2054.4821184304824, 951.5860976951102), (3811.5836308398125, 1260.5615193107983), (2568.2025837398946, 930.7936289401422)])
+    local_center = np.array([692009, 5338095], dtype=np.float64)
+    annot_dir = f"{video_dir}/annotations"
+    for (pts, img), json_path in zip(track_sparse_points(video, points_picture), sorted(os.listdir(annot_dir))):
+        print(pts)
+        centers, corners = transform_image_points(points_utm, pts, os.path.join(annot_dir, json_path))
+        #draw_points_on_image(img, pts)
+
+        # Load the image
+        fig, ax = plt.subplots()
+        ax.imshow(img)
+
+        x_coords, y_coords = zip(*pts)
+        ax.plot(x_coords, y_coords, 'ro')
+
+        for rect in corners:
+            print(rect)
+            x_coords, y_coords = zip(*rect)
+            x_coords = list(x_coords) + [x_coords[0]]
+            y_coords = list(y_coords) + [y_coords[0]]
+            ax.plot(x_coords, y_coords)
+
+        height, width, _ = img.shape
+        ax.set_xlim(0, width)
+        ax.set_ylim(height, 0)
+
+        plt.show()
+
+# TODO polish and automate the script
+if __name__ == "__main__":
+   #example_single_frame()
+   example_video()
