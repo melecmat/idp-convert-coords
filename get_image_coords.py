@@ -23,6 +23,11 @@ def get_points_from_image(image_path):
 
                 # Plot a red circle at the clicked point
                 ax.plot(event.xdata, event.ydata, 'ro')
+
+                # Number the point
+                point_number = len(points)
+                ax.text(event.xdata, event.ydata, str(point_number), color='red', fontsize=12)
+
                 plt.draw()
 
     # Connect the click event listener
@@ -37,6 +42,14 @@ def get_points_from_image(image_path):
 # Example usage
 image_path = "./2022-10-06T16-34-42/frame_0.jpeg"
 selected_points = get_points_from_image(image_path)
+
+fig, ax = plt.subplots()
+image = plt.imread(image_path)
+ax.imshow(image)
+for i, point in enumerate(selected_points):
+    ax.plot(point[0], point[1], 'ro')
+    ax.text(point[0], point[1], str(i+1), color='red', fontsize=12)
+    plt.savefig("./numbered_points_image.png")
 
 # Print the selected points
 print("Selected points:", selected_points)
