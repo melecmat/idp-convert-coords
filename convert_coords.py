@@ -4,6 +4,7 @@ import math
 from skimage import transform
 import cv2
 import os
+import argparse
 
 import json
 import yaml
@@ -175,9 +176,11 @@ def example_single_frame():
     plt.show()
 
 
-def run_video(video_dir, video_path, visualize=True, save=False):
+def run_video(video_dir, video_path, visualize=True, save=None):
     """
     Transform annotations for a video.
+
+    If save is not None, it should be the folder where we save the modified json files
     """
     video_path = f'./{video_dir}/{video_path}'
 
@@ -201,8 +204,12 @@ def run_video(video_dir, video_path, visualize=True, save=False):
                     if js_file.endswith(".json")])):
         with open(os.path.join(annot_dir, json_path), "r") as f:
             json_data = json.load(f)
+        points_utm = points_utm[status == 1]
         centers, corners = transform_image_points(
-            points_utm[status == 1], pts, json_data)
+            points_utm, pts, json_data)
+        if save is not None:
+            # TODO
+            pass
         if visualize:
             ax.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
 
@@ -225,7 +232,7 @@ def run_video(video_dir, video_path, visualize=True, save=False):
     plt.close()
 
 
-def set_global_coords(yaml_path):
+def print_global_coords(yaml_path):
     with open(yaml_path, "r") as f:
         world2pic = yaml.load(f, yaml.BaseLoader)
     trans = compute_transformation(np.array(world2pic["measured_pts"]["pic"], dtype=np.float64), np.array(world2pic["measured_pts"]["world_utm"], dtype=np.float64))
@@ -233,5 +240,11 @@ def set_global_coords(yaml_path):
 
 # TODO polish and automate the script
 if __name__ == "__main__":
-   run_video("2022-10-06T16-34-42", "DJI_0777_cut.mp4")
-   #set_global_coords("2022-10-06T16-34-42/world2pic.yaml")
+    parser = argparse.ArgumentParser(description="Convert coordinates between world and picture based on key points.")
+    parser.add_argument("--video_path", default="2022-10-06T16-34-42/DJI_0777_cut.mp4")
+    parser.add_argument("--compute_global_coords", action="store_true")
+    args = parser.parse_args()
+    if args.compute_global_coords:
+        print_global_coords(f"{os.path.dirname(args.video_path)}/world2pic.yaml")
+    else:
+       run_video(os.path.dirname(args.video_path), os.path.basename(args.video_path))
