@@ -86,10 +86,12 @@ def track_sparse_points(video_path, initial_points, initial_frame=0):
     ret, prev_frame = cap.read()
     prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
     points_to_track = initial_points.astype(np.float32)
-    lk_params = dict(winSize=(15, 15), maxLevel=2,
-                     criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT,
-                               10, 0.03),
-                     minEigThreshold=0.01)
+    lk_params = dict(
+        winSize=(15, 15), 
+        maxLevel=2,
+        criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03),
+        minEigThreshold=0.01
+    )
 
     frame_count = -1
     while True:
@@ -179,13 +181,22 @@ def example_single_frame():
     plt.show()
 
 
-def run_video(video_dir, video_path, visualize=True, save=None):
+def run_video(video_dir, video_name, save):
     """
     Transform annotations for a video.
 
     If save is not None, it should be the folder where we save the modified json files
     """
-    video_path = f'./{video_dir}/{video_path}'
+    video_path = f'./{video_dir}/{video_name}'
+    output_path = f'./{video_dir}/output_{video_name}'
+
+    fps = 25
+    width = 4096
+    height = 2160
+
+    # Define the codec and create a VideoWriter object
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
     # TODO have all the jsons ready to take the points from them
     world2pic_file = f"{video_dir}/world2pic.yaml"
@@ -193,10 +204,10 @@ def run_video(video_dir, video_path, visualize=True, save=None):
         world2pic = yaml.load(f, yaml.BaseLoader)
     # we use the groundtruth points as well as extra added points to estimate the transform
     points_utm = np.array(
-        world2pic["measured_pts"]["world_utm"] + world2pic["extra_points"]["world_utm"],
+        world2pic["extra_points"]["world_utm"],
         dtype=np.float64)
     points_picture = np.array(
-        world2pic["measured_pts"]["pic"] + world2pic["extra_points"]["pic"],
+        world2pic["extra_points"]["pic"],
         dtype=np.float64)
     annot_dir = f"{video_dir}/annotations"
 
@@ -209,18 +220,20 @@ def run_video(video_dir, video_path, visualize=True, save=None):
         points_utm = points_utm[status == 1]
         centers, corners = transform_image_points(
             points_utm, pts, json_data)
-        if save is not None:
-            # TODO
-            pass
-        if visualize:
-            for pt in pts:
-                cv2.circle(img, (int(pt[0]), int(pt[1])), 2, (0, 0, 255), -1)
-            for rect in corners:
-                rect = np.array(rect, dtype=np.int32)
-                cv2.polylines(img, [rect], isClosed=True, color=(0, 255, 0), thickness=1)
+        
+        for pt in pts:
+            cv2.circle(img, (int(pt[0]), int(pt[1])), 10, (0, 0, 255), -1)
+        for rect in corners:
+            rect = np.array(rect, dtype=np.int32)
+            cv2.polylines(img, [rect], isClosed=True, color=(0, 255, 0), thickness=2)
+        if save:
+            # Write the frame to the output video file
+            out.write(img)
+        else:
             cv2.imshow("random name", img)
             cv2.waitKey(0)
     cv2.destroyAllWindows()
+    out.release()
     #plt.close()
 
 
@@ -233,10 +246,12 @@ def print_global_coords(yaml_path):
 # TODO polish and automate the script
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Convert coordinates between world and picture based on key points.")
-    parser.add_argument("--video_path", default="2022-10-06T16-34-42/DJI_0777_cut.mp4")
+    parser.add_argument("--video_dir", default="2022-10-06T16-34-42")
+    parser.add_argument("--video_name", default="DJI_0777_cut.mp4")
     parser.add_argument("--compute_global_coords", action="store_true")
+    parser.add_argument("--save", action="store_true")
     args = parser.parse_args()
     if args.compute_global_coords:
-        print_global_coords(f"{os.path.dirname(args.video_path)}/world2pic.yaml")
+        print_global_coords(f"{args.video_dir}/world2pic.yaml")
     else:
-       run_video(os.path.dirname(args.video_path), os.path.basename(args.video_path))
+       run_video(args.video_dir, args.video_name, save=args.save)
