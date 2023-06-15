@@ -9,6 +9,8 @@ import argparse
 import json
 import yaml
 
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 
 def draw_points_on_image(image, points):
