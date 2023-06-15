@@ -40,7 +40,7 @@ def get_points_from_image(image_path):
     return points
 
 # Example usage
-image_path = "/home/matous/school_work/idp/idp-convert-coords/2022-10-06T16-34-42/frame_0.jpeg"
+image_path = "./2022-10-06T16-34-42/frame_0.jpeg"
 selected_points = get_points_from_image(image_path)
 
 # Print the selected points
