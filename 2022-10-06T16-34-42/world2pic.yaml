@@ -6,5 +6,5 @@ measured_pts:
 # extra points computed from the first frame that were not provided by Aleksander but we computed them hopefully reliaby,
 # they lie on the ground, are reliably detected and not easily occluded (we always need to track at least 3 points to the next frame)
 extra_points:
-  world_utm: []
+  world_utm: [[692289.5673946651, 5338193.6799344355], [692284.6269275799, 5338119.087842716], [692263.4077256516, 5338160.797001297], [692266.9419584728, 5338202.832483331]]
   pic: [[547.2819671368059, 988.1541283805802], [2426.009423054689, 1231.8094924268705], [1344.3346996160617, 1711.2449719588792], [286.57487918957463, 1554.678936109689]]
