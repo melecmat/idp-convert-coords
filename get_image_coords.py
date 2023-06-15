@@ -25,11 +25,6 @@ def get_points_from_image(image_path):
                 ax.plot(event.xdata, event.ydata, 'ro')
                 plt.draw()
 
-                # Check if three points have been selected
-                if len(points) == 3:
-                    # Disconnect the click event listener
-                    fig.canvas.mpl_disconnect(cid)
-
     # Connect the click event listener
     cid = fig.canvas.mpl_connect('button_press_event', onclick)
 
