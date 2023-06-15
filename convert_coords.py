@@ -111,6 +111,7 @@ def track_sparse_points(video_path, initial_points, initial_frame=0):
         if len(good_new) < 3:
             print("Failed to track points, had,", len(good_new),
                   " < 3. We ended at frame", frame_count)
+            return
         points_to_track = good_new
         yield good_new, frame, status
 
@@ -199,7 +200,6 @@ def run_video(video_dir, video_path, visualize=True, save=None):
         dtype=np.float64)
     annot_dir = f"{video_dir}/annotations"
 
-    fig, ax = plt.subplots()
     for (pts, img, status), json_path in zip(
             track_sparse_points(video_path, points_picture),
             sorted([js_file for js_file in os.listdir(annot_dir)
@@ -213,25 +213,15 @@ def run_video(video_dir, video_path, visualize=True, save=None):
             # TODO
             pass
         if visualize:
-            ax.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-
-            x_coords, y_coords = zip(*pts)
-            ax.plot(x_coords, y_coords, 'ro')
+            for pt in pts:
+                cv2.circle(img, (int(pt[0]), int(pt[1])), 2, (0, 0, 255), -1)
             for rect in corners:
-                x_coords, y_coords = zip(*rect)
-                x_coords = list(x_coords) + [x_coords[0]]
-                y_coords = list(y_coords) + [y_coords[0]]
-                ax.plot(x_coords, y_coords)
-
-            height, width, _ = img.shape
-            ax.set_xlim(0, width)
-            ax.set_ylim(height, 0)
-            ax.axis('off')
-
-            plt.pause(0.01)
-            plt.cla()
-            plt.draw()
-    plt.close()
+                rect = np.array(rect, dtype=np.int32)
+                cv2.polylines(img, [rect], isClosed=True, color=(0, 255, 0), thickness=1)
+            cv2.imshow("random name", img)
+            cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    #plt.close()
 
 
 def print_global_coords(yaml_path):
