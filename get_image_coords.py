@@ -19,7 +19,7 @@ def get_points_from_image(image_path):
             # Check the current toolbar mode
             if plt.get_current_fig_manager().toolbar.mode == '':  # Check for no active mode
                 # Append the clicked point to the list
-                points.append((event.xdata, event.ydata))
+                points.append([event.xdata, event.ydata])
 
                 # Plot a red circle at the clicked point
                 ax.plot(event.xdata, event.ydata, 'ro')
