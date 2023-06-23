@@ -200,10 +200,14 @@ def run_video(video_dir, video_name, save):
     fps = 25
     width = 4096
     height = 2160
+    scale_percent = 40 # percent of original size
+    width = int(width * scale_percent / 100)
+    height = int(height * scale_percent / 100)
+    dim = (width, height)
 
     # Define the codec and create a VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    out = cv2.VideoWriter(output_path, fourcc, fps, dim)
 
     # TODO have all the jsons ready to take the points from them
     world2pic_file = f"{video_dir}/world2pic.yaml"
@@ -262,11 +266,14 @@ def run_video(video_dir, video_name, save):
                 [(x,y), (x, y + h), (x + w, y + h), (x + w, y)],
                 dtype=np.int32)
             cv2.polylines(img, [rect], isClosed=True, color=(0, 255, 0), thickness=2)
+
+        # resize image
+        resized = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
         if save:
             # Write the frame to the output video file
-            out.write(img)
+            out.write(resized)
         else:
-            cv2.imshow("random name", img)
+            cv2.imshow("random name", resized)
             cv2.waitKey(0)
     cv2.destroyAllWindows()
     out.release()
