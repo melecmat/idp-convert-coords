@@ -181,6 +181,13 @@ def example_single_frame():
     plt.show()
 
 
+def get_cocovid_bbox(corner_pts):
+    """returns a list upper left corner (minimum corner) + dimensions"""
+    min_coords = np.min(corner_pts, axis=0)
+    max_coords = np.max(corner_pts, axis=0)
+    return min_coords.tolist() + (max_coords - min_coords).tolist()
+
+
 def run_video(video_dir, video_name, save):
     """
     Transform annotations for a video.
@@ -225,10 +232,13 @@ def run_video(video_dir, video_name, save):
         points_utm = points_utm[status == 1]
         centers, corners = transform_image_points(
             points_utm, pts, json_data)
-        
-        for center, corner, annotation in zip(centers, corners, json_data['annotations']):
+
+        # get bounding box:
+        bboxes = [get_cocovid_bbox(corner) for corner in corners]
+        for center, corner, bbox, annotation in zip(centers, corners, bboxes, json_data['annotations']):
             annotation['center'] = center.tolist()
             annotation['corner'] = corner.tolist()
+            annotation["bbox"] = bbox
             del annotation['translation']
             del annotation['rotation']
             del annotation['dimension']
@@ -243,8 +253,14 @@ def run_video(video_dir, video_name, save):
 
         for pt in pts:
             cv2.circle(img, (int(pt[0]), int(pt[1])), 10, (0, 0, 255), -1)
-        for rect in corners:
-            rect = np.array(rect, dtype=np.int32)
+        #for rect in corners:
+        #    rect = np.array(rect, dtype=np.int32)
+        #    cv2.polylines(img, [rect], isClosed=True, color=(0, 255, 0), thickness=2)
+        for bbox in bboxes:
+            x,y,w,h = bbox
+            rect = np.array(
+                [(x,y), (x, y + h), (x + w, y + h), (x + w, y)],
+                dtype=np.int32)
             cv2.polylines(img, [rect], isClosed=True, color=(0, 255, 0), thickness=2)
         if save:
             # Write the frame to the output video file
