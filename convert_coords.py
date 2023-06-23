@@ -6,6 +6,7 @@ from skimage import transform
 import cv2
 import os
 import argparse
+from tqdm import tqdm
 
 import json
 import yaml
@@ -94,6 +95,24 @@ def read_videos(video_paths, modulo_skip=2):
             yield frame
         cap.release()
 
+def get_total_frames(video_list):
+    total_frames = 0
+
+    for video_path in video_list:
+        video = cv2.VideoCapture(video_path)
+
+        # Check if the video is opened successfully
+        if not video.isOpened():
+            print(f"Failed to open {video_path}")
+            continue
+
+        frame_count = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+        total_frames += frame_count
+
+        video.release()
+
+    return total_frames
+
 def track_sparse_points(video_paths, initial_points):
     # TODO test if this works with sequences where the drone turns
     video_iterator = read_videos(video_paths)
@@ -107,8 +126,8 @@ def track_sparse_points(video_paths, initial_points):
         minEigThreshold=0.01
     )
 
-    frame_count = -1
-    for frame in video_iterator:
+    frame_count = get_total_frames(video_paths) // 2
+    for frame_count, frame in tqdm(enumerate(video_iterator), total=frame_count):
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         next_points, status, _ = cv2.calcOpticalFlowPyrLK(
             prev_gray, gray, points_to_track, None, **lk_params)
