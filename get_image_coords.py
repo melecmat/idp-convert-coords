@@ -1,9 +1,8 @@
 import matplotlib.pyplot as plt
+import argparse
+import cv2
 
-def get_points_from_image(image_path):
-    # Load the image
-    image = plt.imread(image_path)
-
+def get_points_from_image(image):
     # Create a figure and axis
     fig, ax = plt.subplots()
 
@@ -39,12 +38,17 @@ def get_points_from_image(image_path):
     # Return the selected points
     return points
 
-# Example usage
-image_path = "./2022-10-06T16-34-42/frame_0.jpeg"
-selected_points = get_points_from_image(image_path)
+parser = argparse.ArgumentParser(description="input a list of point on an image")
+parser.add_argument("video_path")
+args = parser.parse_args()
+
+cap = cv2.VideoCapture(args.video_path)
+ret, image = cap.read()
+cap.release()
+image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+selected_points = get_points_from_image(image)
 
 fig, ax = plt.subplots()
-image = plt.imread(image_path)
 ax.imshow(image)
 for i, point in enumerate(selected_points):
     ax.plot(point[0], point[1], 'ro')
