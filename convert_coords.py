@@ -313,7 +313,7 @@ def print_global_coords(yaml_path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Convert coordinates between world and picture based on key points.")
     parser.add_argument("--video_dir", default="2022-10-06T16-34-42")
-    parser.add_argument("--video_names", nargs='+', required=True)
+    parser.add_argument("--video_names", nargs='+')
     parser.add_argument("--compute_global_coords", action="store_true")
     parser.add_argument("--save", action="store_true")
     args = parser.parse_args()
