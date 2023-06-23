@@ -209,7 +209,12 @@ def run_video(video_dir, video_name, save):
     points_picture = np.array(
         world2pic["extra_points"]["pic"],
         dtype=np.float64)
+
     annot_dir = f"{video_dir}/annotations"
+    annot_idp_dir = f"{video_dir}/annotations_idp"
+    
+    if not os.path.exists(annot_idp_dir):
+        os.makedirs(annot_idp_dir)
 
     for (pts, img, status), json_path in zip(
             track_sparse_points(video_path, points_picture),
@@ -221,6 +226,21 @@ def run_video(video_dir, video_name, save):
         centers, corners = transform_image_points(
             points_utm, pts, json_data)
         
+        for center, corner, annotation in zip(centers, corners, json_data['annotations']):
+            annotation['center'] = center.tolist()
+            annotation['corner'] = corner.tolist()
+            del annotation['translation']
+            del annotation['rotation']
+            del annotation['dimension']
+            del annotation['velocity']
+            del annotation['angular_velocity']
+            del annotation['acceleration']
+            del annotation['road_position']
+
+        # add center and corner information to json data and save it
+        with open(os.path.join(annot_idp_dir, json_path), "w") as f:
+            json.dump(json_data, f)
+
         for pt in pts:
             cv2.circle(img, (int(pt[0]), int(pt[1])), 10, (0, 0, 255), -1)
         for rect in corners:
