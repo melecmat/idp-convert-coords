@@ -1,4 +1,5 @@
 """ tools to convert coordinates from local GPS frame to image and the other way around """
+from importlib.abc import Loader
 import numpy as np
 import math
 from skimage import transform
@@ -79,11 +80,24 @@ def compute_rectangle_corners(center, dimensions, rotation_angle):
 
     return [top_left_corner, top_right_corner, bottom_right_corner, bottom_left_corner]
 
+def read_videos(video_paths, modulo_skip=2):
+    frame_count = -1
+    for path in video_paths:
+        cap = cv2.VideoCapture(path)
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            frame_count += 1
+            if frame_count % modulo_skip != 0:
+                continue
+            yield frame
+        cap.release()
 
-def track_sparse_points(video_path, initial_points, initial_frame=0):
+def track_sparse_points(video_paths, initial_points):
     # TODO test if this works with sequences where the drone turns
-    cap = cv2.VideoCapture(video_path)
-    ret, prev_frame = cap.read()
+    video_iterator = read_videos(video_paths)
+    prev_frame = next(video_iterator)
     prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
     points_to_track = initial_points.astype(np.float32)
     lk_params = dict(
@@ -94,16 +108,7 @@ def track_sparse_points(video_path, initial_points, initial_frame=0):
     )
 
     frame_count = -1
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        frame_count += 1
-        if frame_count < initial_frame:
-            continue
-        # we skip every second frame as we have annotations only for every second frame
-        if frame_count % 2 == 1:
-            continue
+    for frame in video_iterator:
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         next_points, status, _ = cv2.calcOpticalFlowPyrLK(
             prev_gray, gray, points_to_track, None, **lk_params)
@@ -119,7 +124,6 @@ def track_sparse_points(video_path, initial_points, initial_frame=0):
 
         prev_gray = gray.copy()
 
-    cap.release()
 
 
 def transform_image_points(points_utm, points_picture, data, local_center=np.array([692009, 5338095])):
@@ -188,14 +192,14 @@ def get_cocovid_bbox(corner_pts):
     return min_coords.tolist() + (max_coords - min_coords).tolist()
 
 
-def run_video(video_dir, video_name, save):
+def run_video(video_dir, video_names, save):
     """
     Transform annotations for a video.
 
     If save is not None, it should be the folder where we save the modified json files
     """
-    video_path = f'./{video_dir}/{video_name}'
-    output_path = f'./{video_dir}/output_{video_name}'
+    video_paths = [f'./{video_dir}/{video_name}' for video_name in video_names]
+    output_path = f'./{video_dir}/output.mp4'
 
     fps = 25
     width = 4096
@@ -228,7 +232,7 @@ def run_video(video_dir, video_name, save):
         os.makedirs(annot_idp_dir)
 
     for (pts, img, status), json_path in zip(
-            track_sparse_points(video_path, points_picture),
+            track_sparse_points(video_paths, points_picture),
             sorted([js_file for js_file in os.listdir(annot_dir)
                     if js_file.endswith(".json")])):
         with open(os.path.join(annot_dir, json_path), "r") as f:
@@ -290,11 +294,11 @@ def print_global_coords(yaml_path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Convert coordinates between world and picture based on key points.")
     parser.add_argument("--video_dir", default="2022-10-06T16-34-42")
-    parser.add_argument("--video_name", default="DJI_0777_cut.mp4")
+    parser.add_argument("--video_names", nargs='+', required=True)
     parser.add_argument("--compute_global_coords", action="store_true")
     parser.add_argument("--save", action="store_true")
     args = parser.parse_args()
     if args.compute_global_coords:
         print_global_coords(f"{args.video_dir}/world2pic.yaml")
     else:
-       run_video(args.video_dir, args.video_name, save=args.save)
+       run_video(args.video_dir, args.video_names, save=args.save)
