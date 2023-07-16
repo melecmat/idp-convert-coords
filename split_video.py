@@ -16,4 +16,4 @@ if not os.path.exists(image_folder):
     os.makedirs(image_folder)
 
 for frame_id, frame in enumerate(read_videos(video_paths)):
-    cv2.imwrite(os.path.join(image_folder, f"image_{frame_id}.jpg"), frame)
+    cv2.imwrite(os.path.join(image_folder, f"image_{frame_id*2}.jpg"), frame)
