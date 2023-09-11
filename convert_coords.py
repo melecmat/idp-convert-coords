@@ -7,6 +7,7 @@ import cv2
 import os
 import argparse
 from tqdm import tqdm
+from sklearn.model_selection import train_test_split
 
 import json
 import yaml
@@ -217,16 +218,20 @@ def run_video(video_dir, video_names, save):
 
     If save is not None, it should be the folder where we save the modified json files
     """
-    video_paths = [f'./{video_dir}/{video_name}' for video_name in video_names]
-    output_path = f'./{video_dir}/output.mp4'
+    video_paths = [f'{video_dir}/{video_name}' for video_name in video_names]
+    output_path = f'{video_dir}/output.mp4'
 
+    data = []
+    data_ann = []
+    
     fps = 25
     width = 4096
     height = 2160
-    scale_percent = 40 # percent of original size
+    scale_percent = 12 # percent of original size     /home/moh/ap/idp-convert-coords/ap_vid1/world2pic.yaml
     width = int(width * scale_percent / 100)
     height = int(height * scale_percent / 100)
     dim = (width, height)
+    print(width, height)
 
     # Define the codec and create a VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -246,26 +251,43 @@ def run_video(video_dir, video_names, save):
 
     annot_dir = f"{video_dir}/annotations"
     annot_idp_dir = f"{video_dir}/annotations_idp"
+    annot_ap_dir = f"{video_dir}/annotations_ap"
     
     if not os.path.exists(annot_idp_dir):
         os.makedirs(annot_idp_dir)
 
-    for (pts, img, status), json_path in zip(
-            track_sparse_points(video_paths, points_picture),
-            sorted([js_file for js_file in os.listdir(annot_dir)
-                    if js_file.endswith(".json")])):
+    if not os.path.exists(annot_ap_dir):
+        os.makedirs(annot_ap_dir)  
+
+    frame_cnt = 0
+    for (pts, img, status), json_path in zip(track_sparse_points(video_paths, points_picture),
+                                            sorted([js_file for js_file in os.listdir(annot_dir)if js_file.endswith(".json")])):
         with open(os.path.join(annot_dir, json_path), "r") as f:
             json_data = json.load(f)
         points_utm = points_utm[status == 1]
         centers, corners = transform_image_points(
             points_utm, pts, json_data)
 
+        label_file_path = os.path.join(annot_ap_dir, "frame_"+str(frame_cnt)+".txt")
+        label_file = open(label_file_path, 'w')
         # get bounding box:
-        bboxes = [get_cocovid_bbox(corner) for corner in corners]
+        resized_corners = [np.asarray(np.array(rect, dtype=np.int32)*scale_percent/100, dtype=np.int32) for rect in corners]
+        bboxes = [get_cocovid_bbox(corner) for corner in resized_corners]
         for center, corner, bbox, annotation in zip(centers, corners, bboxes, json_data['annotations']):
+            cneter_x = (center.tolist()[0] * scale_percent / 100) / dim[0] # dim[0] is the scaled width
+            cneter_y = (center.tolist()[1] * scale_percent / 100) / dim[1] # dim[1] is the scaled height
+            _,_,box_width,box_height = bbox
+            box_width /= dim[0]
+            box_height /= dim[1]
+
+            s = f"{annotation['category_id']} {cneter_x} {cneter_y} {box_width} {box_height}\n"
+            data_ann.append(s)
+            label_file.write(s)
+            
             annotation['center'] = center.tolist()
             annotation['corner'] = corner.tolist()
             annotation["bbox"] = bbox
+
             del annotation['translation']
             del annotation['rotation']
             del annotation['dimension']
@@ -273,31 +295,44 @@ def run_video(video_dir, video_names, save):
             del annotation['angular_velocity']
             del annotation['acceleration']
             del annotation['road_position']
+        
+        label_file.close()
+        frame_cnt+=2
 
         # add center and corner information to json data and save it
         with open(os.path.join(annot_idp_dir, json_path), "w") as f:
             json.dump(json_data, f)
 
-        for pt in pts:
-            cv2.circle(img, (int(pt[0]), int(pt[1])), 10, (0, 0, 255), -1)
-        #for rect in corners:
-        #    rect = np.array(rect, dtype=np.int32)
-        #    cv2.polylines(img, [rect], isClosed=True, color=(0, 255, 0), thickness=2)
-        for bbox in bboxes:
-            x,y,w,h = bbox
-            rect = np.array(
-                [(x,y), (x, y + h), (x + w, y + h), (x + w, y)],
-                dtype=np.int32)
-            cv2.polylines(img, [rect], isClosed=True, color=(0, 255, 0), thickness=2)
-
         # resize image
         resized = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+        
+        # for pt in pts:
+        #     cv2.circle(img, (int(pt[0]), int(pt[1])), 10, (0, 0, 255), -1)
+        
+        # print(corners[0])
+        # for rect in resized_corners:
+        #    print(rect)
+        #    cv2.polylines(resized, [rect], isClosed=True, color=(0, 255, 0), thickness=2)
+           
+        # for bbox in bboxes:
+        #     x,y,w,h = bbox
+        #     rect = np.array(
+        #         [(x,y), (x, y + h), (x + w, y + h), (x + w, y)],
+        #         dtype=np.int32)
+        #     cv2.polylines(resized, [rect], isClosed=True, color=(0, 255, 0), thickness=2)
+
         if save:
             # Write the frame to the output video file
             out.write(resized)
+            data.append(resized)
         else:
+            # continue
             cv2.imshow("random name", resized)
             cv2.waitKey(0)
+    
+    # X_train_val, X_test, y_train_val, y_test = train_test_split(data, data_ann, test_size=0.1, random_state=69)
+    # X_train, X_val, y_train, y_val = train_test_split(X_train_val, y_train_val, test_size=0.1, random_state=69)
+    
     cv2.destroyAllWindows()
     out.release()
     #plt.close()
