@@ -4,4 +4,7 @@ annotations_idp
 annotations.zip
 *.mp4
 *.MP4
+*.txt
+*.jpg
 numbered_points_image.png
+images
